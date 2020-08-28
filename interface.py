@@ -6,16 +6,32 @@ from aurflux.response import Response
 import discord
 import asyncio
 from aurflux.argh import arghify, Arg, ChannelIDType
+import subprocess
 
 if ty.TYPE_CHECKING:
     import datetime
+
+VERSION = subprocess.check_output(["poetry", "version"]).decode().split(" ")[1]
 
 
 class Interface(aurflux.AurfluxCog):
     listening_channels = set()
 
     def route(self):
+        @self.register
+        @self.aurflux.router.endpoint(":message", decompose=True)
+        async def _(message: discord.Message):
+            if message.author == self.aurflux.user:
+                return
+            if isinstance(message.channel, discord.channel.DMChannel):
+                embed = discord.Embed(
+                    title=f"Pinbot V{VERSION}",
+                    description="Use ..help in your server for command details\n" \
+                                f"[Click me to add to your server](https://discord.com/oauth2/authorize?client_id={self.aurflux.user.id}&scope=bot&permissions=76816)"
+                )
+                await Response(embed=embed).execute(aurflux.MessageContext(bot=self.aurflux, message=message))
 
+        @self.register
         @self.aurflux.commandeer(name="setup", parsed=False)
         async def setup(ctx: aurflux.MessageContext, args: str):
             """
@@ -30,7 +46,7 @@ class Interface(aurflux.AurfluxCog):
                 yield Response("Beginning setup... Type `done` to end setup", delete_after=30)
 
                 header_resp = Response("Please select a pair of channels `#from-channel` to `#to-channel`\n"
-                                       "Once there are `max` pinned messages in #from-channel, the next pin in #from-channel will cause the oldest pin to be converted to an embed and sent in #to-channel\n"
+                                       "Once there are `max` pinned messages in `#from-channel`, the next pin in `#from-channel` will cause the oldest pin to be converted to an embed and sent in `#to-channel`\n"
                                        f"You can do this in the future without `{ctx.full_command}` via `{configs['prefix']}map #from #to`")
                 yield header_resp
 
@@ -69,7 +85,7 @@ class Interface(aurflux.AurfluxCog):
 
                 resp = Response(f"What is the number of native discord pins you would like in {from_channel.mention}? [0-49]\n"
                                 f"If you set this to 0, all pins will be immediately turned into embeds\n"
-                                f"If you set this to any other number <= 49, {from_channel} will hold that many native discord pins, "
+                                f"If you set this to any other number <= 49, {from_channel.mention} will hold that many native discord pins, "
                                 f"after which the **oldest** pin will be turned into an embed")
                 yield resp
 
@@ -96,12 +112,13 @@ class Interface(aurflux.AurfluxCog):
 
                 await max_resp.add_reaction(aurflux.utils.EMOJIS["white_check_mark"])
                 if max_pins == 0:
-                    yield Response(f"Done! When a message is pinned in `{from_channel}`, it will be converted into an embed in `{to_channel}`")
+                    yield Response(f"Done! When a message is pinned in {from_channel.mention}, it will be converted into an embed in {to_channel.mention}")
                 else:
-                    yield Response(f"Done! Once there are {max_pins} pins in {from_channel}, the oldest pin will be converted to an embed in `{to_channel}`")
+                    yield Response(f"Done! Once there are {max_pins} pins in {from_channel.mention}, the oldest pin will be converted to an embed in {to_channel.mention}")
             except asyncio.exceptions.TimeoutError:
                 yield Response(f"Timed out! Stopping setup process. `{ctx.cfg['prefix']}setup` to restart")
 
+        @self.register
         @self.aurflux.commandeer(name="maps", parsed=False)
         async def _(ctx: aurflux.MessageContext, _):
             """
@@ -113,12 +130,12 @@ class Interface(aurflux.AurfluxCog):
 
             embed = discord.Embed(title="Pinbot Map")
             pinmap = configs["pinmap"].items()
-            print(len( pinmap ))
+            print(len(pinmap))
             if len(pinmap) == 0:
                 embed.description = "No maps set!"
                 return Response(embed=embed)
 
-            embed.add_field(name="Map",value="\n".join(f"<#{f}> \u27F6 <#{t}>" for f, t in pinmap), inline=True)
-            embed.add_field(name="Max",value="\n".join(str(configs["maxmap"][f]) for f, _ in pinmap), inline=True)
+            embed.add_field(name="Map", value="\n".join(f"<#{f}> \u27F6 <#{t}>" for f, t in pinmap), inline=True)
+            embed.add_field(name="Max", value="\n".join(str(configs["maxmap"][f]) for f, _ in pinmap), inline=True)
 
             return Response(embed=embed)
