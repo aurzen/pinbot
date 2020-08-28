@@ -5,6 +5,7 @@ import aurflux
 from aurflux.response import Response
 import discord
 import asyncio
+from aurflux.argh import arghify, Arg, ChannelIDType
 
 if ty.TYPE_CHECKING:
     import datetime
@@ -28,7 +29,7 @@ class Interface(aurflux.AurfluxCog):
                 print("setup!")
                 yield Response("Beginning setup... Type `done` to end setup", delete_after=30)
 
-                header_resp = Response("Please select a pair of channels `#from-channel #to-channel`\n"
+                header_resp = Response("Please select a pair of channels `#from-channel` to `#to-channel`\n"
                                        "Once there are `max` pinned messages in #from-channel, the next pin in #from-channel will cause the oldest pin to be converted to an embed and sent in #to-channel\n"
                                        f"You can do this in the future without `{ctx.full_command}` via `{configs['prefix']}map #from #to`")
                 yield header_resp
@@ -55,8 +56,10 @@ class Interface(aurflux.AurfluxCog):
 
                 from_channel, to_channel = aurflux.utils.find_mentions(assignment.content)
                 from_channel, to_channel = self.aurflux.get_channel(from_channel), self.aurflux.get_channel(to_channel)
-                await assignment.delete()
-
+                # try:
+                #     await assignment.delete()
+                # except discord.errors.Forbidden:
+                #     raise aurflux.errors.BotMissingPermissions(discord.Permissions())
                 resp = Response(f"Mapping pins from {from_channel.mention} to embeds in {to_channel.mention}", delete_after=30)
                 yield resp
 
@@ -93,8 +96,29 @@ class Interface(aurflux.AurfluxCog):
 
                 await max_resp.add_reaction(aurflux.utils.EMOJIS["white_check_mark"])
                 if max_pins == 0:
-                    yield Response(f"When a message is pinned in {from_channel}, it will be converted into an embed in {to_channel}")
+                    yield Response(f"Done! When a message is pinned in `{from_channel}`, it will be converted into an embed in `{to_channel}`")
                 else:
-                    yield Response(f"Once there are {max_pins} pins in {from_channel}, the oldest pin will be converted to an embed in {to_channel}")
+                    yield Response(f"Done! Once there are {max_pins} pins in {from_channel}, the oldest pin will be converted to an embed in `{to_channel}`")
             except asyncio.exceptions.TimeoutError:
                 yield Response(f"Timed out! Stopping setup process. `{ctx.cfg['prefix']}setup` to restart")
+
+        @self.aurflux.commandeer(name="maps", parsed=False)
+        async def _(ctx: aurflux.MessageContext, _):
+            """
+            Prints out the current set of maps
+            :param ctx:
+            :return:
+            """
+            configs = self.aurflux.CONFIG.of(ctx)
+
+            embed = discord.Embed(title="Pinbot Map")
+            pinmap = configs["pinmap"].items()
+            print(len( pinmap ))
+            if len(pinmap) == 0:
+                embed.description = "No maps set!"
+                return Response(embed=embed)
+
+            embed.add_field(name="Map",value="\n".join(f"<#{f}> \u27F6 <#{t}>" for f, t in pinmap), inline=True)
+            embed.add_field(name="Max",value="\n".join(str(configs["maxmap"][f]) for f, _ in pinmap), inline=True)
+
+            return Response(embed=embed)

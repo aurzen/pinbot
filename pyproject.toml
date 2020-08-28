@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "pinbot"
+version = "0.1.2"
+description = "Pinbot!"
+authors = ["Zenith <z@zenith.dev>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+aurflux = "^1.2.50"
+"discord.py" = "^1.4.1"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
