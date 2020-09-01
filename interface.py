@@ -79,7 +79,7 @@ class Interface(aurflux.AurfluxCog):
                 resp = Response(f"Mapping pins from {from_channel.mention} to embeds in {to_channel.mention}", delete_after=30)
                 yield resp
 
-                async with self.aurflux.CONFIG.writeable_conf(ctx) as cfg:
+                async with self.aurflux.CONFIG.writeable_conf(ctx.config_identifier) as cfg:
                     cfg["pinmap"] = {**cfg.get("pinmap", {}), from_channel.id: to_channel.id}
                 await resp.message.add_reaction(aurflux.utils.EMOJIS["white_check_mark"])
 
@@ -107,7 +107,7 @@ class Interface(aurflux.AurfluxCog):
                     except ValueError:
                         yield Response("Please enter a number <= 49 and >= 0", delete_after=10)
 
-                async with self.aurflux.CONFIG.writeable_conf(ctx) as cfg:
+                async with self.aurflux.CONFIG.writeable_conf(ctx.config_identifier) as cfg:
                     cfg["maxmap"] = {**cfg.get("maxmap", {}), from_channel.id: max_pins}
 
                 await max_resp.add_reaction(aurflux.utils.EMOJIS["white_check_mark"])
