@@ -32,6 +32,7 @@ class Interface(aurflux.AurfluxCog):
                 await Response(embed=embed).execute(aurflux.MessageContext(bot=self.aurflux, message=message))
 
         @self.register
+        @aurflux.CommandCheck.has_permissions(discord.Permissions(manage_guild=True))
         @self.aurflux.commandeer(name="setup", parsed=False)
         async def setup(ctx: aurflux.MessageContext, args: str):
             """
@@ -47,7 +48,8 @@ class Interface(aurflux.AurfluxCog):
 
                 header_resp = Response("Please select a pair of channels `#from-channel` to `#to-channel`\n"
                                        "Once there are `max` pinned messages in `#from-channel`, the next pin in `#from-channel` will cause the oldest pin to be converted to an embed and sent in `#to-channel`\n"
-                                       f"You can do this in the future without `{ctx.full_command}` via `{configs['prefix']}map #from #to`")
+                                       # f"You can do this in the future without `{ctx.full_command}` via `{configs['prefix']}map #from #to`"
+                                       )
                 yield header_resp
 
                 async def check_pair(ev: aurflux.AurfluxEvent) -> bool:
@@ -57,14 +59,17 @@ class Interface(aurflux.AurfluxCog):
                         return False
                     if m.author != ctx.author:
                         return False
-                    if m.content == "cancel":
+                    if m.content in ("cancel", "done"):
                         return True
                     if not m.channel_mentions:
                         return False
                     s = aurflux.utils.find_mentions(m.content)
-                    return len(s) == 2
+                    return len(s) == 2 or m.content == "done"
 
                 assignment: discord.Message = (await self.aurflux.router.wait_for(":message", check_pair, timeout=45)).args[0]
+                if assignment.content == "cancel":
+                    yield Response(f"Finished setup {aurflux.utils.EMOJIS['white_check_mark']}")
+                    return
 
                 if assignment.content == "done":
                     yield Response(f"Finished setup {aurflux.utils.EMOJIS['white_check_mark']}")
@@ -99,6 +104,8 @@ class Interface(aurflux.AurfluxCog):
 
                 while True:
                     max_resp: discord.Message = (await self.aurflux.router.wait_for(":message", check_max, timeout=45)).args[0]
+                    if max_resp.author == self.aurflux.user:
+                        continue
                     try:
                         max_pins = int(max_resp.content)
                         if not 0 <= max_pins <= 49:
@@ -116,7 +123,7 @@ class Interface(aurflux.AurfluxCog):
                 else:
                     yield Response(f"Done! Once there are {max_pins} pins in {from_channel.mention}, the oldest pin will be converted to an embed in {to_channel.mention}")
             except asyncio.exceptions.TimeoutError:
-                yield Response(f"Timed out! Stopping setup process. `{ctx.cfg['prefix']}setup` to restart")
+                yield Response(f"Timed out! Stopping setup process. `{configs['prefix']}setup` to restart")
 
         @self.register
         @self.aurflux.commandeer(name="maps", parsed=False)

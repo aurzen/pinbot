@@ -21,7 +21,7 @@ if ty.TYPE_CHECKING:
 class Pinbot:
     def __init__(self):
         self.event_router = aurcore.event.EventRouter(name="roombot")
-        self.aurflux = aurflux.Aurflux("pinbot", admin_id=TOKENS.ADMIN_ID, parent_router=self.event_router)
+        self.aurflux = aurflux.Aurflux("pinbot", admin_id=TOKENS.ADMIN_ID, parent_router=self.event_router, builtins=False)
         print("init!")
 
         @self.aurflux.router.endpoint(":ready")
