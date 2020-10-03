@@ -5,7 +5,6 @@ import aurflux
 from aurflux.response import Response
 import discord
 import asyncio
-from aurflux.argh import arghify, Arg, ChannelIDType
 import subprocess
 
 if ty.TYPE_CHECKING:
@@ -18,7 +17,6 @@ class Interface(aurflux.AurfluxCog):
     listening_channels = set()
 
     def route(self):
-        @self.register
         @self.aurflux.router.endpoint(":message", decompose=True)
         async def _(message: discord.Message):
             if message.author == self.aurflux.user:
@@ -31,9 +29,8 @@ class Interface(aurflux.AurfluxCog):
                 )
                 await Response(embed=embed).execute(aurflux.MessageContext(bot=self.aurflux, message=message))
 
-        @self.register
         @aurflux.CommandCheck.has_permissions(discord.Permissions(manage_guild=True))
-        @self.aurflux.commandeer(name="setup", parsed=False)
+        @self._commandeer(name="setup", parsed=False)
         async def setup(ctx: aurflux.MessageContext, args: str):
             """
             setup
@@ -146,3 +143,18 @@ class Interface(aurflux.AurfluxCog):
             embed.add_field(name="Max", value="\n".join(str(configs["maxmap"][f]) for f, _ in pinmap), inline=True)
 
             return Response(embed=embed)
+
+        @self.register
+        @self.aurflux.commandeer(name="pinall", parsed=False)
+        async def _(ctx: aurflux.MessageContext, _):
+            """
+            Forces a re-check of all mapped channels for pins
+            :param ctx:
+            :param _:
+            :return:
+            """
+            configs = self.aurflux.CONFIG.of(ctx)
+            print(configs["pinmap"])
+            for channel_id in configs["pinmap"]:
+                await self.router.submit(event=aurflux.AurfluxEvent(self.aurflux, "aurflux:guild_channel_pins_update", self.aurflux.get_channel(int(channel_id)), None))
+            return Response()

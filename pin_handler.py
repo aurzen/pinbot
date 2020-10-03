@@ -117,15 +117,18 @@ class PinHandler(aurflux.AurfluxCog):
       self.locks: ty.Dict[str, aio.Lock] = clc.defaultdict(aio.Lock)
 
    def route(self):
-      @self.register
       @self.router.endpoint("aurflux:guild_channel_pins_update", decompose=True)
       async def message_update_handler(channel: discord.TextChannel, last_pin: datetime.datetime):
+         print("updating!")
+         print( self.aurflux.CONFIG.of(channel.guild.id)["pinmap"])
          async with self.locks[channel.id]:
             if channel.id not in (config := self.aurflux.CONFIG.of(channel.guild.id))["pinmap"]:
                return
-
+            print("!")
             pins: ty.List[discord.Message] = sorted(await channel.pins(), key=lambda x: x.created_at)
+            print(f"{len(pins)} in {channel}")
             num_to_unpin = max(0, len(pins) - config["maxmap"][channel.id])
+            print(num_to_unpin)
             for pin in pins[:num_to_unpin]:
                for embed in message2embed(pin):
                   await self.aurflux.get_channel(config["pinmap"][channel.id]).send(
