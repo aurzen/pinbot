@@ -6,7 +6,7 @@ authors = ["Zenith <z@zenith.dev>"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
-aurflux = "^1.2.50"
+aurflux = "^1.2.90"
 "discord.py" = "^1.4.1"
 
 [tool.poetry.dev-dependencies]
