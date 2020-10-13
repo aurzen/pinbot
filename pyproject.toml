@@ -1,15 +1,16 @@
 [tool.poetry]
 name = "pinbot"
-version = "2.1.9"
+version = "2.1.10"
 description = "Pinbot!"
 authors = ["Zenith <z@zenith.dev>"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
-aurflux = "^1.2.90"
+aurflux = "*"
 "discord.py" = "^1.4.1"
 
 [tool.poetry.dev-dependencies]
+mypy = "^0.790"
 
 [build-system]
 requires = ["poetry>=0.12"]

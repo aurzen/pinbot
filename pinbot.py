@@ -8,7 +8,7 @@ import aurflux
 import aurcore
 from interface import Interface
 from pin_handler import PinHandler
-from aurflux.argh import *
+import typing as ty
 import TOKENS
 
 log = logging.Logger("a")
@@ -20,19 +20,14 @@ if ty.TYPE_CHECKING:
 
 class Pinbot:
     def __init__(self):
-        self.event_router = aurcore.event.EventRouter(name="roombot")
-        self.aurflux = aurflux.Aurflux("pinbot", admin_id=TOKENS.ADMIN_ID, parent_router=self.event_router, builtins=False)
-        print("init!")
-
-        @self.aurflux.router.endpoint(":ready")
-        def rdy(event: aurcore.event.Event):
-            print("Ready!")
+        self.event_router = aurcore.event.EventRouterHost(name=self.__class__.__name__.lower())
+        self.flux = aurflux.FluxClient("pinbot", admin_id=TOKENS.ADMIN_ID, parent_router=self.event_router)
 
     async def startup(self, token: str):
-        await self.aurflux.start(token)
+        await self.flux.start(token)
 
     async def shutdown(self):
-        await self.aurflux.logout()
+        await self.flux.logout()
 
 
 pinbot = Pinbot()
@@ -41,6 +36,7 @@ pinbot = Pinbot()
 
 
 
-pinbot.aurflux.register_cog(PinHandler)
-pinbot.aurflux.register_cog(Interface)
+pinbot.flux.register_cog(PinHandler)
+pinbot.flux.register_cog(Interface)
+
 aurcore.aiorun(pinbot.startup(token=TOKENS.PINBOT), pinbot.shutdown())
