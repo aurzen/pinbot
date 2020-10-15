@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pinbot"
-version = "2.1.10"
+version = "2.1.11"
 description = "Pinbot!"
 authors = ["Zenith <z@zenith.dev>"]
 

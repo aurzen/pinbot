@@ -44,7 +44,7 @@ class Interface(aurflux.cog.FluxCog):
          :param args:
          :return:
          """
-         configs = self.flux.CONFIG.of(ctx)
+         configs = self.flux.CONFIG.of(ctx.msg_ctx)
          me = ctx.msg_ctx.guild.me
          try:
             print("setup!")
@@ -66,7 +66,7 @@ class Interface(aurflux.cog.FluxCog):
                print(m)
                if m.author == m.guild.me:
                   return False
-               if m.author != ctx.author:
+               if m.author != ctx.author_ctx.author:
                   return False
                if m.content.lower().strip() == "cancel":
                   return True
@@ -103,8 +103,10 @@ class Interface(aurflux.cog.FluxCog):
             resp = Response(f"Mapping pins from {from_channel.mention} to embeds in {to_channel.mention}", delete_after=30)
 
             yield resp
-
-            await resp.message.add_reaction(aurflux.utils.EMOJI.check)
+            try:
+               await resp.message.add_reaction(aurflux.utils.EMOJI.check)
+            except discord.errors.NotFound:
+               pass
 
             resp = Response(f"What is the number of native discord pins you would like in {from_channel.mention}? [0-49]\n"
                             f"If you set this to 0, all pins will be immediately turned into embeds\n"
@@ -121,10 +123,13 @@ class Interface(aurflux.cog.FluxCog):
                return True
 
             max_pins = None
-            async for ev in (await self.flux.router.wait_for(":message", check_max, timeout=30, max_matches=None)):
+            async for ev in self.flux.router.wait_for(":message", check_max, timeout=30, max_matches=None):
                message: discord.Message = ev.args[0]
                if message.author == self.flux.user:
                   continue
+               if message.author != ctx.msg_ctx.author:
+                  continue
+
                if message.content.strip() == "cancel":
                   yield Response("Cancelled. No changes made.")
                   async with self.flux.CONFIG.writeable_conf(ctx.config_identifier) as cfg:
@@ -136,10 +141,11 @@ class Interface(aurflux.cog.FluxCog):
                   if not (0 <= max_pins <= 49):
                      raise aurflux.errors.CommandError(f"The number of pins must be in [0,49].")
                   await message.add_reaction(aurflux.utils.EMOJI.check)
+                  break
                except ValueError:
                   raise aurflux.errors.CommandError(f"`{message.content}` not recognized as a number.")
 
-            async with self.flux.CONFIG.writeable_conf(ctx.config_identifier) as cfg:
+            async with self.flux.CONFIG.writeable_conf(ctx.msg_ctx) as cfg:
                cfg["pinmap"] = {**cfg.get("pinmap", {}), from_channel.id: to_channel.id}
                cfg["maxmap"] = {**cfg.get("maxmap", {}), from_channel.id: max_pins}
 
@@ -155,6 +161,7 @@ class Interface(aurflux.cog.FluxCog):
       async def _(ctx: aurflux.ty.GuildCommandCtx, _):
          """
          maps
+         ==ye
          Prints out the current set of maps
          ==
          ==
@@ -164,6 +171,7 @@ class Interface(aurflux.cog.FluxCog):
          configs = self.flux.CONFIG.of(ctx.msg_ctx)
 
          embed = discord.Embed(title="Pinbot Map")
+         print(configs)
          pinmap = configs["pinmap"].items()
          if len(pinmap) == 0:
             embed.description = "No maps set!"
@@ -186,7 +194,7 @@ class Interface(aurflux.cog.FluxCog):
          :param _:
          :return:
          """
-         configs = self.flux.CONFIG.of(ctx)
+         configs = self.flux.CONFIG.of(ctx.msg_ctx)
          print(configs["pinmap"])
          for channel_id in configs["pinmap"]:
             await self.router.submit(event=aurflux.FluxEvent(self.flux, "aurflux:guild_channel_pins_update", self.flux.get_channel(int(channel_id)), None))

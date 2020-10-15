@@ -111,8 +111,6 @@ def message2embed(message: discord.Message, embed_color: discord.Color = None):
 
 
 class PinHandler(aurflux.FluxCog):
-   listening_channels = set()
-
    def __init__(self, *args, **kwargs):
       super().__init__(*args, **kwargs)
       self.locks: ty.Dict[str, aio.Lock] = clc.defaultdict(aio.Lock)
