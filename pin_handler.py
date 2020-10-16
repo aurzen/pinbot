@@ -43,7 +43,8 @@ def message2embed(message: discord.Message, embed_color: discord.Color = None):
          if any(embed.url.endswith(ext) for ext in IMAGE_EXTS):
             new_embed.set_image(url=embed.url)
          else:
-            new_embed.description = (new_embed.description or "") + f"\n{embed.url}"
+            new_embed.description = new_embed.description or ""
+            new_embed.description += f"\n{embed.url}"
       if isinstance(embed, discord.Embed) and embed.url:
          if embed.thumbnail:
             new_embed.set_image(url=embed.thumbnail.url)
