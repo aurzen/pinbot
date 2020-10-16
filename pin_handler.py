@@ -11,17 +11,21 @@ import aurcore as aur
 if ty.TYPE_CHECKING:
    import datetime
 
+VIDEO_EXTS = ["3g2", "3gp", "aaf", "asf", "avchd", "avi", "drc", "flv", "m2v", "m4p", "m4v", "mkv", "mng", "mov", "mp2", "mp4", "mpe", "mpeg", "mpg", "mpv", "mxf", "nsv", "ogg",
+              "ogv", "qt", "rm", "rmvb", "roq", "svi", "vob", "webm", "wmv", "yuv"]
+IMAGE_EXTS = ["ase", "art", "bmp", "blp", "cd5", "cit", "cpt", "cr2", "cut", "dds", "dib", "djvu", "egt", "exif", "gif", "gpl", "grf", "icns", "ico", "iff", "jng", "jpeg", "jpg",
+              "jfif", "jp2", "jps", "lbm", "max", "miff", "mng", "msp", "nitf", "ota", "pbm", "pc1", "pc2", "pc3", "pcf", "pcx", "pdn", "pgm", "PI1", "PI2", "PI3", "pict", "pct",
+              "pnm", "pns", "ppm", "psb", "psd", "pdd", "psp", "px", "pxm", "pxr", "qfx", "raw", "rle", "sct", "sgi", "rgb", "int", "bw", "tga", "tiff", "tif", "vtf", "xbm", "xcf",
+              "xpm", "3dv", "amf", "ai", "awg", "cgm", "cdr", "cmx", "dxf", "e2d", "egt", "eps", "fs", "gbr", "odg", "svg", "stl", "vrml", "x3d", "sxd", "v2d", "vnd", "wmf", "emf",
+              "art", "xar", "png", "webp", "jxr", "hdp", "wdp", "cur", "ecw", "iff", "lbm", "liff", "nrrd", "pam", "pcx", "pgf", "sgi", "rgb", "rgba", "bw", "int", "inta", "sid",
+              "ras", "sun", "tga"]
+
 
 def message2embed(message: discord.Message, embed_color: discord.Color = None):
    embeds = []
-   # for image in message.
-   print("Converting!@")
-   print(len(message.embeds))
-   print(len(message.attachments))
+
    for m, embed in itt.zip_longest([message], [*message.embeds, *message.attachments], fillvalue=None):
-      print("New embed!")
-      print(m)
-      print(embed)
+
       new_embed = discord.Embed()
       if isinstance(embed, discord.Embed) and (embed.title or embed.description):
          new_embed = embed
@@ -36,78 +40,22 @@ def message2embed(message: discord.Message, embed_color: discord.Color = None):
          new_embed.description = f"{m.content[:1900] + ('...' if len(m.content) > 1900 else '')}"
          new_embed.set_footer(text=f"#{m.channel.name} | Sent at {m.created_at.isoformat('@').replace('@', ' at ')[:-7]}")
       if isinstance(embed, discord.Attachment):
-         new_embed.set_image(url=embed.url)
+         if any(embed.url.endswith(ext) for ext in IMAGE_EXTS):
+            new_embed.set_image(url=embed.url)
+         else:
+            new_embed.description += f"\n{embed.url}"
       if isinstance(embed, discord.Embed) and embed.url:
          if embed.thumbnail:
             new_embed.set_image(url=embed.thumbnail.url)
          else:
             new_embed.set_image(url=embed.url)
-         #
-         # if embed is not None and embed.url:
-         #     print("image!")
-         #     print(embed.url
-         #     new_embed.set_image(url=embed.url)
-         # elif embed is not None and (embed.title or embed.description):
-         #     new_embed = embed
-         #
-      # if new_embed.description:
+
       new_embed.description = (str(new_embed.description) if new_embed.description != discord.Embed.Empty else "") + f"\n\n[Jump to message]({message.jump_url})"
       print(new_embed.to_dict())
-      print("_----------")
 
       embeds.append(new_embed)
 
-   #
-   # for embed in message.embeds:
-   #     print(embed.to_dict())
-   #     if embed.description or embed.title:
-   #         embed.description = f"{embed.description}\n\n[Jump to message]({message.jump_url})"
-   #         embeds.append(embed)
-   #     else:
-   #         new_embed = discord.Embed(
-   #             timestamp=message.created_at
-   #         )
-   #         new_embed.set_author(name=message.author.name, icon_url=message.author.avatar_url, url=message.jump_url)
-   #
-   #         new_embed.description = f"{message.content[:1900] + ('...' if len(message.content) > 1900 else '')}\n\n[Jump to message]({message.jump_url})"
-   #         new_embed.set_footer(text=f"#{message.channel.name} | Sent at {message.created_at.isoformat('@').replace('@', ' at ')[:-7]}")
-   #         if embed.url:
-   #             new_embed.set_image(url=embed.url)
-   #         new_embed.description = f"{embed.description}\n\n[Jump to message]({message.jump_url})"
-   #         embeds.append(embed)
-   #
-   # for attachment in message.attachments:
-   #     new_embed = discord.Embed(
-   #         timestamp=message.created_at
-   #     )
-   #     new_embed.set_author(name=message.author.name, icon_url=message.author.avatar_url, url=message.jump_url)
-   #
-   #     # new_embed.description = f"{message.content[:1900] + ('...' if len(message.content) > 1900 else '')}\n\n[Jump to message]({message.jump_url})"
-   #     new_embed.set_footer(text=f"#{message.channel.name} | Sent at {message.created_at.isoformat('@').replace('@', ' at ')[:-7]}")
-   #     new_embed.set_image(url=attachment.url)
-   #     new_embed.description = f"[Jump to message]({message.jump_url})"
-   #     embeds.append(new_embed)
-   # print(embeds)
    return embeds
-   # return [new_embed, *message.embeds]
-   # if message.embeds:
-   #     for m_embed in message.embeds:
-   #         extra_embed = discord.Embed()
-   #         if m_embed.url:
-   #             extra_embed.set_image(url=m_embed.url)
-   #         if m_embed.image:
-   #             extra_embed.set_image(url=m_embed.image.url)
-   #         if m_embed.video:
-   #             extra_embed._video = m_embed._video
-   #
-   #         break
-   # if message.attachments:
-   #     for attachment in message.attachments:
-   #         if attachment.url:
-   #             new_embed.set_image(url=attachment.url)
-   #             break
-   # if embed_color:
-   #     new_embed.colour = embed_color
 
 
 class PinHandler(aurflux.FluxCog):
@@ -119,22 +67,20 @@ class PinHandler(aurflux.FluxCog):
       @self.router.listen_for("flux:guild_channel_pins_update")
       @aur.Eventful.decompose
       async def message_update_handler(channel: discord.TextChannel, last_pin: datetime.datetime):
-         print("updating!")
          g_ctx = aurflux.context.ManualGuildCtx(flux=self.flux, guild=channel.guild)
 
-         print(self.flux.CONFIG.of(g_ctx)["pinmap"])
          async with self.locks[channel.id]:
             if channel.id not in (config := self.flux.CONFIG.of(g_ctx))["pinmap"]:
                return
-            print("!")
             pins: ty.List[discord.Message] = sorted(await channel.pins(), key=lambda x: x.created_at)
-            print(f"{len(pins)} in {channel}")
             num_to_unpin = max(0, len(pins) - config["maxmap"][channel.id])
-            print(num_to_unpin)
             for pin in pins[:num_to_unpin]:
                for embed in message2embed(pin):
                   await self.flux.get_channel(config["pinmap"][channel.id]).send(
                      embed=embed
                   )
                await pin.unpin()
-         del self.locks[channel.id]
+         try:
+            del self.locks[channel.id]
+         except KeyError:
+            pass

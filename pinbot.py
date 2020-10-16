@@ -21,7 +21,7 @@ if ty.TYPE_CHECKING:
 class Pinbot:
     def __init__(self):
         self.event_router = aurcore.event.EventRouterHost(name=self.__class__.__name__.lower())
-        self.flux = aurflux.FluxClient("pinbot", admin_id=TOKENS.ADMIN_ID, parent_router=self.event_router, status="..help | s.ze.ax/d for help")
+        self.flux = aurflux.FluxClient("pinbot", admin_id=TOKENS.ADMIN_ID, parent_router=self.event_router, status="..help|s.ze.ax/d for support|pm for invite")
 
     async def startup(self, token: str):
         await self.flux.start(token)

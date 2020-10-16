@@ -33,7 +33,7 @@ class Interface(aurflux.cog.FluxCog):
             await message.channel.send(embed=embed)
 
       @self._commandeer(name="setup", default_auths=[aurflux.auth.Record.allow_server_manager()])
-      async def setup(ctx: aurflux.ty.GuildCommandCtx, args: str):
+      async def __setup(ctx: aurflux.ty.GuildCommandCtx, args: str):
          """
          setup
          ==
@@ -89,14 +89,17 @@ class Interface(aurflux.cog.FluxCog):
                   raise aurflux.CommandError(f"{from_channel_r} not recognized as a Text Channel. Please use a mention or an id.")
                if not isinstance(to_channel, discord.TextChannel):
                   raise aurflux.CommandError(f"{to_channel_r}  not recognized as a Text Channel. Please use a mention or an id.")
+               print("Checking perms!")
+               aurflux.utils.perm_check(from_channel, discord.Permissions(manage_messages=True, read_messages=True))
+               aurflux.utils.perm_check(to_channel, discord.Permissions(embed_links=True, send_messages=True))
 
-               from_perms = discord.Permissions(manage_channels=True)
-               if not from_perms <= from_channel.permissions_for(me):
-                  raise aurflux.errors.BotMissingPermissions(have=from_channel.permissions_for(me), need=from_perms)
-
-               to_perms = discord.Permissions(send_messages=True, embed_links=True)
-               if not to_perms <= to_channel.permissions_for(me):
-                  raise aurflux.errors.BotMissingPermissions(have=from_channel.permissions_for(me), need=to_perms)
+               # from_perms = discord.Permissions(manage_channels=True)
+               # if not from_perms <= from_channel.permissions_for(me):
+               #    raise aurflux.errors.BotMissingPermissions(have=from_channel.permissions_for(me), need=from_perms)
+               #
+               # to_perms = discord.Permissions(send_messages=True, embed_links=True)
+               # if not to_perms <= to_channel.permissions_for(me):
+               #    raise aurflux.errors.BotMissingPermissions(have=from_channel.permissions_for(me), need=to_perms)
 
             verify_channels()
 
@@ -129,7 +132,8 @@ class Interface(aurflux.cog.FluxCog):
                   continue
                if message.author != ctx.msg_ctx.author:
                   continue
-
+               if not message.content:
+                  continue
                if message.content.strip() == "cancel":
                   yield Response("Cancelled. No changes made.")
                   async with self.flux.CONFIG.writeable_conf(ctx.config_identifier) as cfg:
@@ -158,10 +162,10 @@ class Interface(aurflux.cog.FluxCog):
             yield Response(f"Timed out! Stopping setup process. `{configs['prefix']}setup` to restart")
 
       @self._commandeer(name="maps", default_auths=[aurflux.auth.Record.allow_server_manager()])
-      async def _(ctx: aurflux.ty.GuildCommandCtx, _):
+      async def __maps(ctx: aurflux.ty.GuildCommandCtx, _):
          """
          maps
-         ==ye
+         ==
          Prints out the current set of maps
          ==
          ==
@@ -183,11 +187,11 @@ class Interface(aurflux.cog.FluxCog):
          return Response(embed=embed)
 
       @self._commandeer(name="pinall", default_auths=[aurflux.auth.Record.allow_server_manager()])
-      async def _(ctx: aurflux.ty.GuildCommandCtx, _):
+      async def __pinall(ctx: aurflux.ty.GuildCommandCtx, _):
          """
          pinall
          ==
-         Forces a re-check of all mapped channels for pins
+         Forces a re-check of all mapped channels for pins & permissions
          ==
          ==
          :param ctx:
@@ -195,6 +199,26 @@ class Interface(aurflux.cog.FluxCog):
          :return:
          """
          configs = self.flux.CONFIG.of(ctx.msg_ctx)
-         print(configs["pinmap"])
+         chs_to_delete = []
+         for from_ch_id, to_ch_id in configs["pinmap"].items():
+            from_channel, to_channel = ctx.flux.get_channel(from_ch_id), ctx.flux.get_channel(to_ch_id)
+            if not from_channel:
+               chs_to_delete.append(from_ch_id)
+               yield Response(f"Source channel with ID in config {from_ch_id} does not seem to exist anymore. Removing from config..")
+               continue
+            if not to_channel:
+               chs_to_delete.append(from_ch_id)
+               yield Response(f"Destination channel with ID in config {from_ch_id} does not seem to exist anymore. Removing from config..")
+               continue
+
+            aurflux.utils.perm_check(from_channel, discord.Permissions(manage_messages=True, read_messages=True))
+            aurflux.utils.perm_check(to_channel, discord.Permissions(embed_links=True, send_messages=True))
+
+         async with ctx.flux.CONFIG.writeable_conf(ctx.msg_ctx) as cfg:
+            for ch_id in chs_to_delete:
+               del cfg["pinmap"][ch_id]
+
          for channel_id in configs["pinmap"]:
             await self.router.submit(event=aurflux.FluxEvent(self.flux, "aurflux:guild_channel_pins_update", self.flux.get_channel(int(channel_id)), None))
+
+         yield Response()
