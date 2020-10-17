@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
+from loguru import logger
 import aurflux
 # import aiohttp
 import aurcore
@@ -11,8 +11,6 @@ from pin_handler import PinHandler
 import typing as ty
 import TOKENS
 
-log = logging.Logger("a")
-log.setLevel(logging.DEBUG)
 
 if ty.TYPE_CHECKING:
    from aurflux.context import MessageCtx

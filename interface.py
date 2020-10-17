@@ -61,8 +61,8 @@ class Interface(aurflux.cog.FluxCog):
                                    )
             yield header_resp
 
-            async def check_pair(ev: aurflux.FluxEvent) -> bool:
-               m: discord.Message = ev.args[0]
+            async def check_pair(check_ev: aurflux.FluxEvent) -> bool:
+               m: discord.Message = check_ev.args[0]
                print(m)
                if m.author == m.guild.me:
                   return False
@@ -80,32 +80,22 @@ class Interface(aurflux.cog.FluxCog):
                yield Response(f"Cancelled setup {aurflux.utils.EMOJI.check}, no changes have been made.")
                return
 
+            # <editor-fold desc="Check Channels & Perms">
             from_channel_r, to_channel_r = aurflux.utils.find_mentions(assignment.content)
             from_channel, to_channel = self.flux.get_channel(from_channel_r), self.flux.get_channel(to_channel_r)
 
-            def verify_channels():
+            if not isinstance(from_channel, discord.TextChannel):
+               raise aurflux.CommandError(f"{from_channel_r} not recognized as a Text Channel. Please use a mention or an id.")
+            if not isinstance(to_channel, discord.TextChannel):
+               raise aurflux.CommandError(f"{to_channel_r}  not recognized as a Text Channel. Please use a mention or an id.")
 
-               if not isinstance(from_channel, discord.TextChannel):
-                  raise aurflux.CommandError(f"{from_channel_r} not recognized as a Text Channel. Please use a mention or an id.")
-               if not isinstance(to_channel, discord.TextChannel):
-                  raise aurflux.CommandError(f"{to_channel_r}  not recognized as a Text Channel. Please use a mention or an id.")
-               print("Checking perms!")
-               aurflux.utils.perm_check(from_channel, discord.Permissions(manage_messages=True, read_messages=True))
-               aurflux.utils.perm_check(to_channel, discord.Permissions(embed_links=True, send_messages=True))
-
-               # from_perms = discord.Permissions(manage_channels=True)
-               # if not from_perms <= from_channel.permissions_for(me):
-               #    raise aurflux.errors.BotMissingPermissions(have=from_channel.permissions_for(me), need=from_perms)
-               #
-               # to_perms = discord.Permissions(send_messages=True, embed_links=True)
-               # if not to_perms <= to_channel.permissions_for(me):
-               #    raise aurflux.errors.BotMissingPermissions(have=from_channel.permissions_for(me), need=to_perms)
-
-            verify_channels()
+            aurflux.utils.perm_check(from_channel, discord.Permissions(manage_messages=True, read_messages=True))
+            aurflux.utils.perm_check(to_channel, discord.Permissions(embed_links=True, send_messages=True))
 
             resp = Response(f"Mapping pins from {from_channel.mention} to embeds in {to_channel.mention}", delete_after=30)
-
             yield resp
+            # </editor-fold>
+
             try:
                await resp.message.add_reaction(aurflux.utils.EMOJI.check)
             except discord.errors.NotFound:
@@ -175,7 +165,6 @@ class Interface(aurflux.cog.FluxCog):
          configs = self.flux.CONFIG.of(ctx.msg_ctx)
 
          embed = discord.Embed(title="Pinbot Map")
-         print(configs)
          pinmap = configs["pinmap"].items()
          if len(pinmap) == 0:
             embed.description = "No maps set!"
@@ -209,6 +198,14 @@ class Interface(aurflux.cog.FluxCog):
             if not to_channel:
                chs_to_delete.append(from_ch_id)
                yield Response(f"Destination channel with ID in config {from_ch_id} does not seem to exist anymore. Removing from config..")
+               continue
+            if not isinstance(from_channel, discord.TextChannel):
+               chs_to_delete.append(from_ch_id)
+               yield Response(f"Source channel with ID in config {from_ch_id} does not seem to be a text channel. Removing from config..")
+               continue
+            if not isinstance(to_channel, discord.TextChannel):
+               chs_to_delete.append(from_ch_id)
+               yield Response(f"Destination channel with ID in config {from_ch_id} does not seem to be a text channel. Removing from config..")
                continue
 
             aurflux.utils.perm_check(from_channel, discord.Permissions(manage_messages=True, read_messages=True))

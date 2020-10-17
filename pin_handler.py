@@ -52,7 +52,6 @@ def message2embed(message: discord.Message, embed_color: discord.Color = None):
             new_embed.set_image(url=embed.url)
 
       new_embed.description = (str(new_embed.description) if new_embed.description != discord.Embed.Empty else "") + f"\n\n[Jump to message]({message.jump_url})"
-      print(new_embed.to_dict())
 
       embeds.append(new_embed)
 
