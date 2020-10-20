@@ -6,9 +6,14 @@ from aurflux.command import Response
 
 import aurflux.auth
 import discord
-import asyncio
+import base64
+import asyncio as aio
 import subprocess
 import aurcore as aur
+import pickle
+from loguru import logger
+
+aur.log.setup()
 
 if ty.TYPE_CHECKING:
    import datetime
@@ -18,6 +23,20 @@ VERSION = subprocess.check_output(["poetry", "version"]).decode().split(" ")[1]
 
 class Interface(aurflux.cog.FluxCog):
    def load(self):
+      async def verify_channel_pair(from_id, to_id):
+         from_channel, to_channel = self.flux.get_channel(from_id), self.flux.get_channel(to_id)
+
+         if not isinstance(from_channel, discord.TextChannel):
+            raise ValueError(f"{from_id} not recognized as a Text Channel")
+            # raise aurflux.CommandError(f"{from_id} not recognized as a Text Channel. Please use a mention or an id.")
+         if not isinstance(to_channel, discord.TextChannel):
+            raise ValueError(f"{from_id} not recognized as a Text Channel")
+            # raise aurflux.CommandError(f"{to_id}  not recognized as a Text Channel. Please use a mention or an id.")
+
+         aurflux.utils.perm_check(from_channel, discord.Permissions(manage_messages=True, read_messages=True))
+         aurflux.utils.perm_check(to_channel, discord.Permissions(embed_links=True, send_messages=True))
+         return from_channel, to_channel
+
       @self.flux.router.listen_for(":message")
       @aur.Eventful.decompose
       async def _(message: discord.Message):
@@ -28,7 +47,8 @@ class Interface(aurflux.cog.FluxCog):
                title=f"Pinbot V{VERSION}",
                description=("Use ..help in your server for command details\n"
                             f"[Click me to add to your server](https://discord.com/oauth2/authorize?client_id={self.flux.user.id}&scope=bot&permissions=76816)\n"
-                            f"[Get help here](https://s.ze.ax/d)")
+                            f"[Get help here](https://s.ze.ax/d)\n"
+                            f"If you are upgrading from v1, you can use `..upgrade` to import settings")
             )
             await message.channel.send(embed=embed)
 
@@ -47,7 +67,9 @@ class Interface(aurflux.cog.FluxCog):
          configs = self.flux.CONFIG.of(ctx.msg_ctx)
          me = ctx.msg_ctx.guild.me
          try:
-            print("setup!")
+            if (pinbot_v1 := await self.flux.get_member_s(ctx.msg_ctx.guild, 535572077118488576)):
+               yield Response(f"{pinbot_v1.mention} found. If you would like to automatically import settings, please say `cancel` and then `{configs['prefix']}setup`")
+
             if not ctx.msg_ctx.channel.permissions_for(me).add_reactions:
                yield Response(f"I need <add_reactions> in {ctx.msg_ctx.channel.mention}.")
 
@@ -63,7 +85,8 @@ class Interface(aurflux.cog.FluxCog):
 
             async def check_pair(check_ev: aurflux.FluxEvent) -> bool:
                m: discord.Message = check_ev.args[0]
-               print(m)
+               if not m.guild:
+                  return False
                if m.author == m.guild.me:
                   return False
                if m.author != ctx.author_ctx.author:
@@ -82,15 +105,10 @@ class Interface(aurflux.cog.FluxCog):
 
             # <editor-fold desc="Check Channels & Perms">
             from_channel_r, to_channel_r = aurflux.utils.find_mentions(assignment.content)
-            from_channel, to_channel = self.flux.get_channel(from_channel_r), self.flux.get_channel(to_channel_r)
-
-            if not isinstance(from_channel, discord.TextChannel):
-               raise aurflux.CommandError(f"{from_channel_r} not recognized as a Text Channel. Please use a mention or an id.")
-            if not isinstance(to_channel, discord.TextChannel):
-               raise aurflux.CommandError(f"{to_channel_r}  not recognized as a Text Channel. Please use a mention or an id.")
-
-            aurflux.utils.perm_check(from_channel, discord.Permissions(manage_messages=True, read_messages=True))
-            aurflux.utils.perm_check(to_channel, discord.Permissions(embed_links=True, send_messages=True))
+            try:
+               from_channel, to_channel = await verify_channel_pair(from_channel_r, to_channel_r)
+            except ValueError as e:
+               raise aurflux.CommandError(f"{e}. Please use a mention or an id.")
 
             resp = Response(f"Mapping pins from {from_channel.mention} to embeds in {to_channel.mention}", delete_after=30)
             yield resp
@@ -126,7 +144,7 @@ class Interface(aurflux.cog.FluxCog):
                   continue
                if message.content.strip() == "cancel":
                   yield Response("Cancelled. No changes made.")
-                  async with self.flux.CONFIG.writeable_conf(ctx.config_identifier) as cfg:
+                  async with self.flux.CONFIG.writeable_conf(ctx.msg_ctx) as cfg:
                      cfg["pinmap"] = pinmap_orig
                   return
 
@@ -148,7 +166,7 @@ class Interface(aurflux.cog.FluxCog):
             else:
                yield Response(f"Done! Once there are {max_pins} pins in {from_channel.mention}, the oldest pin will be converted to an embed in {to_channel.mention}")
 
-         except asyncio.exceptions.TimeoutError:
+         except aio.exceptions.TimeoutError:
             yield Response(f"Timed out! Stopping setup process. `{configs['prefix']}setup` to restart")
 
       @self._commandeer(name="maps", default_auths=[aurflux.auth.Record.allow_server_manager()])
@@ -199,6 +217,7 @@ class Interface(aurflux.cog.FluxCog):
                chs_to_delete.append(from_ch_id)
                yield Response(f"Destination channel with ID in config {from_ch_id} does not seem to exist anymore. Removing from config..")
                continue
+
             if not isinstance(from_channel, discord.TextChannel):
                chs_to_delete.append(from_ch_id)
                yield Response(f"Source channel with ID in config {from_ch_id} does not seem to be a text channel. Removing from config..")
@@ -216,6 +235,52 @@ class Interface(aurflux.cog.FluxCog):
                del cfg["pinmap"][ch_id]
 
          for channel_id in configs["pinmap"]:
-            await self.router.submit(event=aurflux.FluxEvent(self.flux, "aurflux:guild_channel_pins_update", self.flux.get_channel(int(channel_id)), None))
+            await self.router.submit(event=aurflux.FluxEvent(self.flux, "flux:guild_channel_pins_update", self.flux.get_channel(int(channel_id)), None))
 
          yield Response()
+
+      @self._commandeer(name="import", default_auths=[aurflux.auth.Record.allow_server_manager()])
+      async def __import(ctx: aurflux.ty.GuildCommandCtx, _):
+         """
+         import
+         ==
+         Imports configs from Pinbot v1
+         ==
+         ==
+         :param ctx:
+         :param _:
+         :return:
+         """
+         c = ctx.flux.get_channel(767823163823226931)
+         assert isinstance(c, discord.TextChannel)
+
+         await c.send(str(ctx.msg_ctx.guild.id))
+
+         def message_check(ev: aurflux.FluxEvent) -> bool:
+            message: discord.Message = ev.args[0]
+            print(message)
+            return message.channel == c and message.author.id == 535572077118488576
+
+         async with ctx.msg_ctx.channel.typing():
+            try:
+               message = (await self.router.wait_for("flux:message", check=message_check, timeout=30)).args[0]
+            except aio.TimeoutError as e:
+               return Response("Timed out. Please try again later :(", status="error")
+            warnings = ""
+            async with self.flux.CONFIG.writeable_conf(ctx.msg_ctx) as cfg:
+               maps, max_ = pickle.loads(base64.b85decode(message.content))
+               logger.info(f"Importing for server {ctx.msg_ctx.guild}")
+               logger.info(maps)
+               logger.info(max_)
+               for k, v in maps.items():
+                  try:
+                     await verify_channel_pair(k, v)
+                  except ValueError as e:
+                     warnings += f"The mapping <#{k}>[{k}] -> <#{v}>[{v}] contains invalid channel IDs, possibly deleted. Ignored\n"
+                  except aurflux.errors.BotMissingPermissions as e:
+                     warnings += f"Warning: {e}! These need to be added for this map to work.\n"
+                  else:
+                     cfg["pinmap"][k] = v
+                     cfg["maxmap"][k] = max_
+
+         return Response(f"Finished. Use `..maps` to see your imported settings.\n{warnings}")

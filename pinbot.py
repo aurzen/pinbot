@@ -5,11 +5,13 @@ import contextlib
 from loguru import logger
 import aurflux
 # import aiohttp
-import aurcore
+import aurcore as aur
 from interface import Interface
 from pin_handler import PinHandler
 import typing as ty
 import TOKENS
+
+aur.log.setup()
 
 
 if ty.TYPE_CHECKING:
@@ -18,7 +20,7 @@ if ty.TYPE_CHECKING:
 
 class Pinbot:
    def __init__(self):
-      self.event_router = aurcore.event.EventRouterHost(name=self.__class__.__name__.lower())
+      self.event_router = aur.event.EventRouterHost(name=self.__class__.__name__.lower())
       self.flux = aurflux.FluxClient(
          "pinbot",
          admin_id=TOKENS.ADMIN_ID,
@@ -38,4 +40,4 @@ pinbot = Pinbot()
 pinbot.flux.register_cog(PinHandler)
 pinbot.flux.register_cog(Interface)
 
-aurcore.aiorun(pinbot.startup(token=TOKENS.PINBOT), pinbot.shutdown())
+aur.aiorun(pinbot.startup(token=TOKENS.PINBOT), pinbot.shutdown())
