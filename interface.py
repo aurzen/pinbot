@@ -10,6 +10,9 @@ import base64
 import asyncio as aio
 import subprocess
 import aurcore as aur
+import collections as clc
+import functools as fnt
+import itertools as itt
 import pickle
 from loguru import logger
 
@@ -68,7 +71,7 @@ class Interface(aurflux.cog.FluxCog):
          me = ctx.msg_ctx.guild.me
          try:
             if (pinbot_v1 := await self.flux.get_member_s(ctx.msg_ctx.guild, 535572077118488576)):
-               yield Response(f"{pinbot_v1.mention} found. If you would like to automatically import settings, please say `cancel` and then `{configs['prefix']}setup`")
+               yield Response(f"{pinbot_v1.mention} found. If you would like to automatically import settings, please say `cancel` and then `{configs['prefix']}import`")
 
             if not ctx.msg_ctx.channel.permissions_for(me).add_reactions:
                yield Response(f"I need <add_reactions> in {ctx.msg_ctx.channel.mention}.")
@@ -161,10 +164,29 @@ class Interface(aurflux.cog.FluxCog):
                cfg["pinmap"] = {**cfg.get("pinmap", {}), from_channel.id: to_channel.id}
                cfg["maxmap"] = {**cfg.get("maxmap", {}), from_channel.id: max_pins}
 
+            yield Response(f"Would you like the oldest or newest pin in the channel to be converted to an embed upon reaching {max_pins} pins?\n`oldest` or `newest`")
+
+            old_new = "oldest"
+            async for ev in self.flux.router.wait_for(":message", check_max, timeout=30, max_matches=None):
+               message: discord.Message = ev.args[0]
+               if message.author == self.flux.user:
+                  continue
+               if message.author != ctx.msg_ctx.author:
+                  continue
+               if not message.content:
+                  continue
+               if (old_new := message.content.strip().lower()) in ["oldest", "newest"]:
+                  yield Response(f"Set to {old_new}")
+                  async with self.flux.CONFIG.writeable_conf(ctx.msg_ctx) as cfg:
+                     cfg["newestmap"][from_channel.id] = old_new == "newest"
+                  break
+
+               raise aurflux.errors.CommandError(f"`{message.content}` is not `oldest` or `newest`.")
+
             if max_pins == 0:
                yield Response(f"Done! When a message is pinned in {from_channel.mention}, it will be converted into an embed in {to_channel.mention}")
             else:
-               yield Response(f"Done! Once there are {max_pins} pins in {from_channel.mention}, the oldest pin will be converted to an embed in {to_channel.mention}")
+               yield Response(f"Done! Once there are {max_pins} pins in {from_channel.mention}, the {old_new} pin will be converted to an embed in {to_channel.mention}")
 
          except aio.exceptions.TimeoutError:
             yield Response(f"Timed out! Stopping setup process. `{configs['prefix']}setup` to restart")
@@ -181,17 +203,44 @@ class Interface(aurflux.cog.FluxCog):
          :return:
          """
          configs = self.flux.CONFIG.of(ctx.msg_ctx)
-
-         embed = discord.Embed(title="Pinbot Map")
+         embeds = clc.defaultdict(discord.Embed)
+         embeds[0].title = "Pinbot Map"
+         # embed = discord.Embed(title="Pinbot Map")
          pinmap = configs["pinmap"].items()
          if len(pinmap) == 0:
-            embed.description = "No maps set!"
-            return Response(embed=embed)
+            embeds[0].description = "No maps set!"
 
-         embed.add_field(name="Map", value="\n".join(f"<#{f}>\t\u27F6\t<#{t}>" for f, t in pinmap), inline=True)
-         embed.add_field(name="Max", value="\n".join(str(configs["maxmap"][f]) for f, _ in pinmap), inline=True)
 
-         return Response(embed=embed)
+         maps = []
+         maxes = [str(configs["maxmap"][f]) for f, _ in pinmap]
+
+         for f, t in pinmap:
+            f_c = await self.flux.get_channel_s(f)
+            f_text = f_c.mention if f_c else f"`{f}`"
+            t_c = await self.flux.get_channel_s(t)
+            t_text = t_c.mention if t_c else f"`{t}`"
+            maps.append(f"{f_text}\t\u27F6\t{t_text}")
+
+         lengths = itt.accumulate([len(m) + len(f) for m, f in zip(maps, maxes)])
+
+         def join_text(a: ty.List[ty.Tuple[str, str]],b: ty.Tuple[str, str]):
+            b = (b[0], b[1] + len(b[0])//30 * "\n")
+            if sum(map(len, a[-1])) >= 1000:
+               return a + [b]
+            else:
+               return [*a[:-1], (f"{a[-1][0]}\n{b[0]}", f"{a[-1][1]}\n{b[1]}")]
+
+
+         embed_blocks = fnt.reduce(join_text, zip(maps, maxes), [("","")])
+         for index, (map_block, max_block) in enumerate(embed_blocks):
+
+            embeds[index].add_field(name="Map", value=map_block, inline=True)
+
+            embeds[index].add_field(name="Max", value=max_block, inline=True)
+
+         print(embed_blocks)
+         for _, embed in embeds.items():
+            yield Response(embed=embed)
 
       @self._commandeer(name="pinall", default_auths=[aurflux.auth.Record.allow_server_manager()])
       async def __pinall(ctx: aurflux.ty.GuildCommandCtx, _):
@@ -239,6 +288,55 @@ class Interface(aurflux.cog.FluxCog):
 
          yield Response()
 
+      # @self._commandeer(name="reverse", default_auths=[aurflux.auth.Record.allow_server_manager()])
+      # async def __reverse(ctx: aurflux.ty.GuildCommandCtx, args: str):
+      #    """
+      #    reverse
+      #    ==
+      #    Toggles between oldest pin first (reverse = False) and newest pin first (reverse = True)
+      #    ==
+      #    ==
+      #    :param ctx:
+      #    :param args:
+      #    :return:
+      #    """
+      #    async with self.flux.CONFIG.writeable_conf(ctx.msg_ctx) as cfg_w:
+      #       cfg_w["reverse"] = not cfg_w["reverse"]
+      #    return Response(f"Set reverse to {cfg_w['reverse']}")
+
+      @self._commandeer(name="unmap", default_auths=[aurflux.auth.Record.allow_server_manager()])
+      async def __unmap(ctx: aurflux.ty.GuildCommandCtx, args: str):
+         """
+         unmap <source_channel>
+         ==
+         Deletes the map from <source_channel> to the destination
+         ==
+         <source_channel> : The source channel that has been mapped with `setup` before
+         ==
+         :param ctx:
+         :return:
+         """
+         try:
+            source_channel_r = aurflux.utils.find_mentions(args)[0]
+         except (TypeError, IndexError):
+            source_channel_r = int(args.strip())
+
+         async with self.flux.CONFIG.writeable_conf(ctx.msg_ctx) as cfg_w:
+
+            if source_channel_r not in cfg_w["pinmap"]:
+               raise aurflux.errors.CommandError(f"`{source_channel_r}` not found in map: {', '.join(f'`{c}`' for c in cfg_w['pinmap'])}")
+            del cfg_w["pinmap"][source_channel_r]
+            try:
+               del cfg_w["maxmap"][source_channel_r]
+            except KeyError:
+               pass
+
+         desc = source_channel_r
+         if (source_channel := await self.flux.get_channel_s(source_channel_r)):
+            desc = source_channel.mention
+
+         return Response(f"Removed {desc} from map.")
+
       @self._commandeer(name="import", default_auths=[aurflux.auth.Record.allow_server_manager()])
       async def __import(ctx: aurflux.ty.GuildCommandCtx, _):
          """
@@ -284,3 +382,23 @@ class Interface(aurflux.cog.FluxCog):
                      cfg["maxmap"][k] = max_
 
          return Response(f"Finished. Use `..maps` to see your imported settings.\n{warnings}")
+
+      @self._commandeer(name="lb", default_auths=[aurflux.auth.Record.allow_server_manager()])
+      async def __lb(ctx: aurflux.ty.GuildCommandCtx, args: str):
+         """
+         lb (<channel>)
+         ==
+         Tabulates a leaderboard of the top authors of pinned messages from a channel or the entire server
+         ==
+         channel: the channel (source or destination) to tabulate the leaderboard for. Leave blank for the entire server.
+         ==
+         :param ctx:
+         :param _:
+         :return:
+         """
+         try:
+            channel = aurflux.utils.find_mentions(args)[0]
+         except (TypeError, IndexError):
+            channel = None
+
+         configs = self.flux.CONFIG.of(ctx.msg_ctx)

@@ -7,7 +7,7 @@ import itertools as itt
 import collections as clc
 import asyncio as aio
 import aurcore as aur
-
+import aurflux.context
 if ty.TYPE_CHECKING:
    import datetime
 
@@ -72,14 +72,23 @@ class PinHandler(aurflux.FluxCog):
          async with self.locks[channel.id]:
             if channel.id not in (config := self.flux.CONFIG.of(g_ctx))["pinmap"]:
                return
-            pins: ty.List[discord.Message] = sorted(await channel.pins(), key=lambda x: x.created_at)
+
+            dest_channel = await self.flux.get_channel_s(config["pinmap"][channel.id])
+            if not dest_channel:
+               await channel.send(f"Destination channel {config['pinmap'][channel.id]} no longer exists? Automatically unmapping...")
+               async with self.flux.CONFIG.writeable_conf(aurflux.context.ManualGuildCtx(flux=self.flux, guild=channel.guild)) as cfg:
+                  del config["pinmap"][channel.id]
+                  del config["maxmap"][channel.id]
+            reverse = channel.id in config["newestmap"] and config["newestmap"][channel.id]
+            pins: ty.List[discord.Message] = sorted(await channel.pins(), key=lambda x: x.created_at, reverse=reverse)
             num_to_unpin = max(0, len(pins) - config["maxmap"][channel.id])
             for pin in pins[:num_to_unpin]:
                for embed in message2embed(pin):
                   await self.flux.get_channel(config["pinmap"][channel.id]).send(
                      embed=embed
                   )
-               await pin.unpin()
+                  await pin.unpin()
+
          try:
             del self.locks[channel.id]
          except KeyError:
